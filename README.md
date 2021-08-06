@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/haesleinhuepf/napari-brightness-contrast/branch/master/graph/badge.svg)](https://codecov.io/gh/haesleinhuepf/napari-brightness-contrast)
 
 Advanced layer optimization options, e.g. for brightness / contrast
-![](docs/images/napari-brightness-contrast.gif)
+![](docs/images/napari-brightness-contrast2.gif)
 
 Note: This will not work for big image data at the moment.
 
