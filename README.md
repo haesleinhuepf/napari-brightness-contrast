@@ -6,10 +6,11 @@
 [![tests](https://github.com/haesleinhuepf/napari-brightness-contrast/workflows/tests/badge.svg)](https://github.com/haesleinhuepf/napari-brightness-contrast/actions)
 [![codecov](https://codecov.io/gh/haesleinhuepf/napari-brightness-contrast/branch/master/graph/badge.svg)](https://codecov.io/gh/haesleinhuepf/napari-brightness-contrast)
 
-Advanced layer visualization options, e.g. for brightness / contrast
-![](docs/images/napari-brightness-contrast2.gif)
+Advanced layer histogram visualization options, e.g. for brightness / contrast
+![](docs/images/napari-brightness-contrast3.gif)
 
-Note: This will not work for big image data at the moment.
+Note: This will not work for big image data at the moment. 
+If the user interface feels slow, consider installing [pyclesperanto](https://github.com/clEsperanto/pyclesperanto_prototype) to speed it up.
 
 ----------------------------------
 
