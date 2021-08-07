@@ -8,7 +8,7 @@ import pyqtgraph as pg
 import numpy as np
 import napari
 
-class Brightness_Contrast(QWidget):
+class BrightnessContrast(QWidget):
     def __init__(self, napari_viewer):
         super().__init__()
         self.viewer = napari_viewer
@@ -320,4 +320,4 @@ def min_max(data):
 @napari_hook_implementation
 def napari_experimental_provide_dock_widget():
     # you can return either a single widget, or a sequence of widgets
-    return [Brightness_Contrast]
+    return [BrightnessContrast]
