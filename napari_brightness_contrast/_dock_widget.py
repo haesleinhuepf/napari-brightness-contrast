@@ -206,15 +206,19 @@ class LayerContrastLimitsWidget(QWidget):
         self.layout().addWidget(slider)
         self.layout().addWidget(lbl_max)
 
-def histogram(data, num_bins : int = 256, minimum = None, maximum = None):
+def histogram(data, num_bins : int = 256, minimum = None, maximum = None, use_cle=True):
     intensity_range = None
     if minimum is not None and maximum is not None:
         intensity_range = (minimum, maximum)
-    try:
-        import pyclesperanto_prototype as cle
-        hist = np.asarray(cle.histogram(data, num_bins=num_bins, minimum_intensity=minimum, maximum_intensity=maximum, determine_min_max=False))
-    except ImportError:
-        hist = np.histogram(data, bins=num_bins, range=intensity_range)
+
+    if use_cle:
+        try:
+            import pyclesperanto_prototype as cle
+            hist = np.asarray(cle.histogram(data, num_bins=num_bins, minimum_intensity=minimum, maximum_intensity=maximum, determine_min_max=False))
+        except ImportError:
+            use_cle = False
+    if not use_cle:
+        hist, _ = np.histogram(data, bins=num_bins, range=intensity_range)
     return hist
 
 def min_max(data):
