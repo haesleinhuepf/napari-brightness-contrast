@@ -37,6 +37,32 @@ class Brightness_Contrast(QWidget):
         self.sliders.setLayout(QVBoxLayout())
         self.sliders.layout().setSpacing(0)
 
+        # set contrast limits to absolute values
+        absoluter = QWidget()
+        absoluter.setLayout(QHBoxLayout())
+
+        min_float =  -2147483648
+        max_float = 2147483647
+
+        lbl = QLabel("Absolute")
+        lower = QSpinBox()
+        lower.setMinimum(min_float)
+        lower.setMaximum(max_float)
+        lower.setValue(0)
+        upper = QSpinBox()
+        upper.setMinimum(min_float)
+        upper.setMaximum(max_float)
+        upper.setValue(255)
+
+        btn = QPushButton("Set")
+        btn.clicked.connect(self._set_absolutes)
+        absoluter.layout().addWidget(lbl)
+        absoluter.layout().addWidget(lower)
+        absoluter.layout().addWidget(upper)
+        absoluter.layout().addWidget(btn)
+        self.spinner_lower_absolute = lower
+        self.spinner_upper_absolute = upper
+
         # auto-contrast using percentiles
         percentiler = QWidget()
         percentiler.setLayout(QHBoxLayout())
@@ -45,20 +71,24 @@ class Brightness_Contrast(QWidget):
         lower = QSpinBox()
         lower.setMinimum(0)
         lower.setMaximum(100)
-        lower.setValue(1)
+        lower.setValue(10)
         upper = QSpinBox()
         upper.setMinimum(0)
         upper.setMaximum(100)
-        upper.setValue(99)
+        upper.setValue(90)
 
-        btn = QPushButton("Auto")
+        btn = QPushButton("Set")
         btn.clicked.connect(self._auto_percentiles)
         percentiler.layout().addWidget(lbl)
         percentiler.layout().addWidget(lower)
         percentiler.layout().addWidget(upper)
         percentiler.layout().addWidget(btn)
-        self.lower = lower
-        self.upper = upper
+        self.spinner_lower_percentile = lower
+        self.spinner_upper_percentile = upper
+
+        # reset all to full range
+        btn_full_range = QPushButton("Set full range")
+        btn_full_range.clicked.connect(self._set_full_range)
 
         # setup layout
         self.setLayout(QVBoxLayout())
@@ -66,7 +96,9 @@ class Brightness_Contrast(QWidget):
         self.layout().addWidget(graph_container)
         self.layout().addWidget(min_max_widget)
         self.layout().addWidget(self.sliders)
+        self.layout().addWidget(absoluter)
         self.layout().addWidget(percentiler)
+        self.layout().addWidget(btn_full_range)
 
         verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.layout().addItem(verticalSpacer)
@@ -104,7 +136,7 @@ class Brightness_Contrast(QWidget):
         colors = []
         for layer in self.selected_image_layers():
             # plot histogram
-            hist = histogram(layer.data, num_bins=num_bins, minimum=all_minimum, maximum=all_maximum)
+            hist = histogram(layer, num_bins=num_bins, minimum=all_minimum, maximum=all_maximum)
             colormap = layer.colormap.colors
             color = np.asarray(colormap[-1, 0:3]) * 255
             colors.append(color)
@@ -139,16 +171,37 @@ class Brightness_Contrast(QWidget):
 
                 layout.addWidget(row)
 
+        # patch events
+        selected_layers = self.selected_image_layers()
+        for layer in self.viewer.layers:
+            layer.events.data.disconnect(self._data_changed_event)
+            if layer in selected_layers:
+                layer.events.data.connect(self._data_changed_event)
 
+    def _data_changed_event(self, event):
+        selected_layers = self.selected_image_layers()
+        for layer in selected_layers:
+            if layer.data is event.value:
+                reset_histogram_cache(layer)
+                self.redraw(rebuild_gui=False)
+                return
+
+    def _set_absolutes(self):
+        lower = self.spinner_lower_absolute.value()
+        upper = self.spinner_upper_absolute.value()
+        for layer in self.selected_image_layers():
+            layer.contrast_limits = [lower, upper]
+
+        self.redraw()
 
     def _auto_percentiles(self):
-        print("auto contrast", self.lower.value(), self.upper.value())
+        print("auto contrast", self.spinner_lower_percentile.value(), self.spinner_upper_percentile.value())
 
-        lower_percentile = self.lower.value() / 100
-        upper_percentile = self.upper.value() / 100
+        lower_percentile = self.spinner_lower_percentile.value() / 100
+        upper_percentile = self.spinner_upper_percentile.value() / 100
 
         for layer in self.selected_image_layers():
-            hist = histogram(layer.data, num_bins=256)
+            hist = histogram(layer, num_bins=256)
             minimum, maximum = min_max(layer.data)
 
             sum_hist = np.sum(hist)
@@ -169,6 +222,12 @@ class Brightness_Contrast(QWidget):
             layer.contrast_limits = [lower_threshold, upper_threshold]
 
             self.redraw()
+
+    def _set_full_range(self):
+        for layer in self.selected_image_layers():
+            layer.contrast_limits = min_max(layer.data)
+
+        self.redraw()
 
     def selected_image_layers(self):
         return [layer for layer in self.viewer.layers.selection if isinstance(layer, napari.layers.Image)]
@@ -206,7 +265,17 @@ class LayerContrastLimitsWidget(QWidget):
         self.layout().addWidget(slider)
         self.layout().addWidget(lbl_max)
 
-def histogram(data, num_bins : int = 256, minimum = None, maximum = None, use_cle=True):
+def histogram(layer, num_bins : int = 256, minimum = None, maximum = None, use_cle=True):
+    #histogram_metadata_key = 'histogram' + str(num_bins)
+    #if histogram_metadata_key in layer.metadata:
+    #    return layer.metadata[histogram_metadata_key]
+    if "bc_histogram_num_bins" in layer.metadata.keys() and "bc_histogram"  in layer.metadata.keys():
+        if num_bins == layer.metadata["bc_histogram_num_bins"]:
+            print("using cached histogram")
+            return layer.metadata["bc_histogram"]
+    print("determining histogram")
+
+    data = layer.data
     intensity_range = None
     if minimum is not None and maximum is not None:
         intensity_range = (minimum, maximum)
@@ -219,7 +288,30 @@ def histogram(data, num_bins : int = 256, minimum = None, maximum = None, use_cl
             use_cle = False
     if not use_cle:
         hist, _ = np.histogram(data, bins=num_bins, range=intensity_range)
+
+    # cache result
+    if hasattr(layer.data, "bc_histogram_num_bins") and hasattr(layer.data, "bc_histogram"):
+        if num_bins == layer.data.bc_histogram_num_bins:
+            return layer.data.bc_histogram_num_bins
+
+    # delete cache when data is changed
+    def _refresh_data(event):
+        reset_histogram_cache(layer)
+
+        layer.events.data.disconnect(_refresh_data)
+    layer.events.data.connect(_refresh_data)
+
+    layer.metadata["bc_histogram_num_bins"] = num_bins
+    layer.metadata["bc_histogram"] = hist
+
     return hist
+
+def reset_histogram_cache(layer):
+    print("emptying cache")
+    if "bc_histogram_num_bins" in layer.metadata.keys() and "bc_histogram" in layer.metadata.keys():
+        layer.metadata.pop("bc_histogram_num_bins")
+        layer.metadata.pop("bc_histogram")
+
 
 def min_max(data):
     return data.min(), data.max()
