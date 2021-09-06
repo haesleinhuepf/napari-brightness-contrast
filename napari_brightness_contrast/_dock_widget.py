@@ -9,11 +9,17 @@ import numpy as np
 import napari
 
 class BrightnessContrast(QWidget):
+    """
+    A user interface for showing a histogram of currently selected image layers in napari and min/max contrast limits
+    sliders.
+    """
+
     def __init__(self, napari_viewer):
         super().__init__()
         self.viewer = napari_viewer
         napari_viewer.layers.selection.events.changed.connect(self._on_selection)
 
+        # This container will contain the histogram plot
         graph_container = QWidget()
 
         # histogram view
@@ -41,9 +47,11 @@ class BrightnessContrast(QWidget):
         absoluter = QWidget()
         absoluter.setLayout(QHBoxLayout())
 
-        min_float =  -2147483648
+        # very small and very large numbers used as min/max for the spinners
+        min_float = -2147483648
         max_float = 2147483647
 
+        # Allow user to set min/max of all layers to absolute values
         lbl = QLabel("Absolute")
         lower = QSpinBox()
         lower.setMinimum(min_float)
@@ -53,7 +61,6 @@ class BrightnessContrast(QWidget):
         upper.setMinimum(min_float)
         upper.setMaximum(max_float)
         upper.setValue(255)
-
         btn = QPushButton("Set")
         btn.clicked.connect(self._set_absolutes)
         absoluter.layout().addWidget(lbl)
@@ -63,10 +70,9 @@ class BrightnessContrast(QWidget):
         self.spinner_lower_absolute = lower
         self.spinner_upper_absolute = upper
 
-        # auto-contrast using percentiles
+        # allow user to use auto-contrast using percentiles
         percentiler = QWidget()
         percentiler.setLayout(QHBoxLayout())
-
         lbl = QLabel("Percentiles")
         lower = QSpinBox()
         lower.setMinimum(0)
@@ -76,7 +82,6 @@ class BrightnessContrast(QWidget):
         upper.setMinimum(0)
         upper.setMaximum(100)
         upper.setValue(90)
-
         btn = QPushButton("Set")
         btn.clicked.connect(self._auto_percentiles)
         percentiler.layout().addWidget(lbl)
@@ -86,11 +91,11 @@ class BrightnessContrast(QWidget):
         self.spinner_lower_percentile = lower
         self.spinner_upper_percentile = upper
 
-        # reset all to full range
+        # allow user to reset all to full range
         btn_full_range = QPushButton("Set full range")
         btn_full_range.clicked.connect(self._set_full_range)
 
-        # setup layout
+        # setup layout of the whole dialog
         self.setLayout(QVBoxLayout())
 
         self.layout().addWidget(graph_container)
@@ -111,10 +116,11 @@ class BrightnessContrast(QWidget):
         self.redraw()
 
     def redraw(self, rebuild_gui=True):
-        if not hasattr(self, "p2"):
-            self.p2 = self.graphics_widget.addPlot()
+        # add a new plot to the graphics_widget or empty the old plot
+        if not hasattr(self, "plot"):
+            self.plot = self.graphics_widget.addPlot()
         else:
-            self.p2.clear()
+            self.plot.clear()
 
         # determine min/max intensity of all shown layers
         all_minimum = None
@@ -140,7 +146,8 @@ class BrightnessContrast(QWidget):
             colormap = layer.colormap.colors
             color = np.asarray(colormap[-1, 0:3]) * 255
             colors.append(color)
-            self.p2.plot(hist / np.max(hist), pen=color, name=layer.name)
+            # add a new line to the plot (histogram)
+            self.plot.plot(hist / np.max(hist), pen=color, name=layer.name)
 
             # plot min/max
             contrast_limits = layer.contrast_limits
@@ -155,10 +162,11 @@ class BrightnessContrast(QWidget):
                     arr[i] = 1
                 else:
                     arr[i] = (i - min_idx) / (max_idx - min_idx)
-            self.p2.plot(arr, pen=pg.mkPen(color=color, style=Qt.DotLine))
+            # add a new line to the plot (dotted min/max line)
+            self.plot.plot(arr, pen=pg.mkPen(color=color, style=Qt.DotLine))
 
-        self.p2.hideAxis('left')
-        self.p2.hideAxis('bottom')
+        self.plot.hideAxis('left')
+        self.plot.hideAxis('bottom')
 
         # update sliders
         if rebuild_gui:
@@ -179,6 +187,7 @@ class BrightnessContrast(QWidget):
                 layer.events.data.connect(self._data_changed_event)
 
     def _data_changed_event(self, event):
+        # reset visualization in case a layer's content has changed
         selected_layers = self.selected_image_layers()
         for layer in selected_layers:
             if layer.data is event.value:
@@ -187,6 +196,7 @@ class BrightnessContrast(QWidget):
                 return
 
     def _set_absolutes(self):
+        # Set contrast limits to absolute values configured by the user
         lower = self.spinner_lower_absolute.value()
         upper = self.spinner_upper_absolute.value()
         for layer in self.selected_image_layers():
@@ -195,11 +205,13 @@ class BrightnessContrast(QWidget):
         self.redraw()
 
     def _auto_percentiles(self):
+        # Set contrast limits to percentiles configured by the user
         print("auto contrast", self.spinner_lower_percentile.value(), self.spinner_upper_percentile.value())
 
         lower_percentile = self.spinner_lower_percentile.value() / 100
         upper_percentile = self.spinner_upper_percentile.value() / 100
 
+        # determine intensities which correspond to the percentiles for each layer
         for layer in self.selected_image_layers():
             hist = histogram(layer, num_bins=256)
             minimum, maximum = min_max(layer.data)
@@ -233,8 +245,11 @@ class BrightnessContrast(QWidget):
         return [layer for layer in self.viewer.layers.selection if isinstance(layer, napari.layers.Image)]
 
 class LayerContrastLimitsWidget(QWidget):
+    """
+    This widget corresponds to a single line represeting a layer with the option to configure min/max contrast limits.
+    """
     def __init__(self, layer, color, all_minimum, all_maximum, gui):
-        super().__init__()
+        super().__init__(gui)
 
         self.setLayout(QHBoxLayout())
 
@@ -242,17 +257,20 @@ class LayerContrastLimitsWidget(QWidget):
         lbl.setStyleSheet('color: #%02x%02x%02x' % tuple(color.astype(int)))
         self.layout().addWidget(lbl)
 
+        # show min/max intensity
         lbl_min = QLabel()
         lbl_min.setText("{:.2f}".format(layer.contrast_limits[0]))
         lbl_max = QLabel()
         lbl_max.setText("{:.2f}".format(layer.contrast_limits[1]))
 
+        # allow to tune min and max within one slider
         slider = QRangeSlider()
         slider.setOrientation(Qt.Horizontal)
         slider.setMinimum(all_minimum)
         slider.setMaximum(all_maximum)
         slider.setValue(layer.contrast_limits)
 
+        # update on change
         def value_changed():
             layer.contrast_limits = slider.value()
             lbl_min.setText("{:.2f}".format(slider.value()[0]))
@@ -266,14 +284,15 @@ class LayerContrastLimitsWidget(QWidget):
         self.layout().addWidget(lbl_max)
 
 def histogram(layer, num_bins : int = 256, minimum = None, maximum = None, use_cle=True):
-    #histogram_metadata_key = 'histogram' + str(num_bins)
-    #if histogram_metadata_key in layer.metadata:
-    #    return layer.metadata[histogram_metadata_key]
+    """
+    This function determines a histogram for a layer and caches it within the metadata of the layer. If the same
+    histogram is requested, it will be taken from the cache.
+    :return:
+    """
     if "bc_histogram_num_bins" in layer.metadata.keys() and "bc_histogram"  in layer.metadata.keys():
         if num_bins == layer.metadata["bc_histogram_num_bins"]:
             print("using cached histogram")
             return layer.metadata["bc_histogram"]
-    print("determining histogram")
 
     data = layer.data
     intensity_range = None
@@ -307,15 +326,12 @@ def histogram(layer, num_bins : int = 256, minimum = None, maximum = None, use_c
     return hist
 
 def reset_histogram_cache(layer):
-    print("emptying cache")
     if "bc_histogram_num_bins" in layer.metadata.keys() and "bc_histogram" in layer.metadata.keys():
         layer.metadata.pop("bc_histogram_num_bins")
         layer.metadata.pop("bc_histogram")
 
-
 def min_max(data):
     return data.min(), data.max()
-
 
 @napari_hook_implementation
 def napari_experimental_provide_dock_widget():
