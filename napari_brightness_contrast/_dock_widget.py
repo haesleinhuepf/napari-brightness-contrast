@@ -297,6 +297,8 @@ def histogram(layer, num_bins : int = 256, minimum = None, maximum = None, use_c
             return layer.metadata["bc_histogram"]
 
     data = layer.data
+    if "dask" in str(type(data)): # ugh
+        data = np.asarray(data)
     intensity_range = None
     if minimum is not None and maximum is not None:
         intensity_range = (minimum, maximum)
@@ -333,6 +335,8 @@ def reset_histogram_cache(layer):
         layer.metadata.pop("bc_histogram")
 
 def min_max(data):
+    if "dask" in str(type(data)): # ugh
+        data = np.asarray(data)
     return data.min(), data.max()
 
 @napari_hook_implementation
