@@ -7,7 +7,9 @@ from superqt import QRangeSlider
 import pyqtgraph as pg
 import numpy as np
 import napari
+from napari_tools_menu import register_dock_widget
 
+@register_dock_widget(menu="Visualization > Brightness / Contrast")
 class BrightnessContrast(QWidget):
     """
     A user interface for showing a histogram of currently selected image layers in napari and min/max contrast limits
