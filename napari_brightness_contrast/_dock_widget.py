@@ -184,18 +184,20 @@ class BrightnessContrast(QWidget):
         # patch events
         selected_layers = self.selected_image_layers()
         for layer in self.viewer.layers:
+            layer.events.contrast_limits.disconnect(self._data_changed_event)
             layer.events.data.disconnect(self._data_changed_event)
             if layer in selected_layers:
+                layer.events.contrast_limits.connect(self._data_changed_event)
                 layer.events.data.connect(self._data_changed_event)
 
     def _data_changed_event(self, event):
         # reset visualization in case a layer's content has changed
         selected_layers = self.selected_image_layers()
         for layer in selected_layers:
-            if layer.data is event.value:
-                reset_histogram_cache(layer)
-                self.redraw(rebuild_gui=False)
-                return
+            if hasattr(event, "value") and layer.data is event.value:
+                    reset_histogram_cache(layer)
+            self.redraw(rebuild_gui=False)
+            return
 
     def _set_absolutes(self):
         # Set contrast limits to absolute values configured by the user
