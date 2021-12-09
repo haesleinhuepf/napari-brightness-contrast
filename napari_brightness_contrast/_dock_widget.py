@@ -295,7 +295,6 @@ def histogram(layer, num_bins : int = 256, minimum = None, maximum = None, use_c
     """
     if "bc_histogram_num_bins" in layer.metadata.keys() and "bc_histogram"  in layer.metadata.keys():
         if num_bins == layer.metadata["bc_histogram_num_bins"]:
-            print("using cached histogram")
             return layer.metadata["bc_histogram"]
 
     data = layer.data
