@@ -339,7 +339,8 @@ def reset_histogram_cache(layer):
 def min_max(data):
     if "dask" in str(type(data)): # ugh
         data = np.asarray(data)
-    return data.min(), data.max()
+
+    return float(data.min()), float(data.max())
 
 @napari_hook_implementation
 def napari_experimental_provide_dock_widget():
