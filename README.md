@@ -5,6 +5,8 @@
 [![Python Version](https://img.shields.io/pypi/pyversions/napari-brightness-contrast.svg?color=green)](https://python.org)
 [![tests](https://github.com/haesleinhuepf/napari-brightness-contrast/workflows/tests/badge.svg)](https://github.com/haesleinhuepf/napari-brightness-contrast/actions)
 [![codecov](https://codecov.io/gh/haesleinhuepf/napari-brightness-contrast/branch/master/graph/badge.svg)](https://codecov.io/gh/haesleinhuepf/napari-brightness-contrast)
+[![Development Status](https://img.shields.io/pypi/status/napari-brightness-contrast.svg)](https://en.wikipedia.org/wiki/Software_release_life_cycle#Alpha)
+[![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-brightness-contrast)](https://napari-hub.org/plugins/napari-brightness-contrast)
 
 Advanced layer histogram visualization options, e.g. for brightness / contrast
 ![](https://github.com/haesleinhuepf/napari-brightness-contrast/blob/main/docs/images/napari-brightness-contrast3.gif?raw=true)
