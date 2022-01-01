@@ -1,2 +1,6 @@
 napari[all]
+numpy
+pyqtgraph
+superqt
+napari-tools-menu
 -e .
