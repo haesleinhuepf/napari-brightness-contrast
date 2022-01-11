@@ -124,46 +124,44 @@ class BrightnessContrast(QWidget):
         else:
             self.plot.clear()
 
-        # determine min/max intensity of all shown layers
-        all_minimum = None
-        all_maximum = None
-        for layer in self.selected_image_layers():
-            minimum, maximum = min_max(layer.data)
-            if all_minimum is None or all_minimum > minimum:
-                all_minimum = minimum
-            if all_maximum is None or all_maximum < maximum:
-                all_maximum = maximum
-        all_minimum = np.floor(all_minimum) if all_minimum is not None else 0
-        all_maximum = np.ceil(all_maximum) if all_maximum is not None else all_minimum + 1
+        # determine min/max intensity of all shown layers      
+        try :          
+            all_minimum = np.floor(min(np.asarray(layer._data_view).min() for layer in self.selected_image_layers()))
+            try : 
+                all_maximum = np.ceil(max(np.asarray(layer._data_view).max() for layer in self.selected_image_layers()))
+            except (ValueError, TypeError) as e:
+                all_maximum = all_minimum + 1
+        except (ValueError, TypeError) as e:
+            all_minimum = 0
+            all_maximum = 1
+
 
         self.label_minimum.setText(str(all_minimum))
         self.label_maximum.setText(str(all_maximum))
 
         # visualize histograms
         num_bins = 50
-        colors = []
-        for layer in self.selected_image_layers():
+
+        colors = [None]*len(self.selected_image_layers())
+        
+        for i, layer in enumerate(self.selected_image_layers()):
             # plot histogram
             hist = histogram(layer, num_bins=num_bins, minimum=all_minimum, maximum=all_maximum)
-            colormap = layer.colormap.colors
-            color = np.asarray(colormap[-1, 0:3]) * 255
-            colors.append(color)
+            color = np.asarray(layer.colormap.colors[-1, 0:3]) * 255
+            colors[i] = color
             # add a new line to the plot (histogram)
             self.plot.plot(hist / np.max(hist), pen=color, name=layer.name)
 
             # plot min/max
-            contrast_limits = layer.contrast_limits
-            min_idx = (contrast_limits[0] - all_minimum) / (all_maximum - all_minimum) * num_bins
-            max_idx = (contrast_limits[1] - all_minimum) / (all_maximum - all_minimum) * num_bins
+            min_idx, max_idx = np.asarray(layer.contrast_limits) - all_minimum / (all_maximum - all_minimum) * num_bins
 
             arr = np.zeros(hist.shape)
-            for i in range(0, len(arr)):
-                if i < min_idx:
-                    arr[i] = 0
-                elif i > max_idx:
-                    arr[i] = 1
-                else:
-                    arr[i] = (i - min_idx) / (max_idx - min_idx)
+            r = np.array(range(len(arr)))
+            
+            arr[r < min_idx] = 0
+            arr[r > max_idx] = 1
+            arr[np.logical_and(r >= min_idx, r <= max_idx)] = r[np.logical_and(r >= min_idx, r <= max_idx)] - min_idx / (max_idx - min_idx)
+            
             # add a new line to the plot (dotted min/max line)
             self.plot.plot(arr, pen=pg.mkPen(color=color, style=Qt.DotLine))
 
@@ -173,13 +171,15 @@ class BrightnessContrast(QWidget):
         # update sliders
         if rebuild_gui:
             layout = self.sliders.layout()
-            for i in reversed(range(layout.count())):
-                layout.itemAt(i).widget().setParent(None)
-            for i, layer in enumerate(self.selected_image_layers()):
-
-                row = LayerContrastLimitsWidget(layer, colors[i], all_minimum, all_maximum, self)
-
-                layout.addWidget(row)
+            for i in range(layout.count(), 0, -1):
+                try:
+                    layout.itemAt(i).widget().setParent(None)         
+                except AttributeError:
+                    return
+            
+            for layer, color in zip(self.selected_image_layers(), colors):
+                # add row
+                layout.addWidget(LayerContrastLimitsWidget(layer, color, all_minimum, all_maximum, self))
 
         # patch events
         selected_layers = self.selected_image_layers()
@@ -195,7 +195,7 @@ class BrightnessContrast(QWidget):
         selected_layers = self.selected_image_layers()
         for layer in selected_layers:
             if hasattr(event, "value") and layer.data is event.value:
-                    reset_histogram_cache(layer)
+                reset_histogram_cache(layer)
             self.redraw(rebuild_gui=False)
             return
 
@@ -217,22 +217,18 @@ class BrightnessContrast(QWidget):
 
         # determine intensities which correspond to the percentiles for each layer
         for layer in self.selected_image_layers():
-            hist = histogram(layer, num_bins=256)
-            minimum, maximum = min_max(layer.data)
+            num_bins = 256
+            minimum, maximum = min_max(layer._data_view)
+            hist = histogram(layer, num_bins=num_bins, minimum = minimum, maximum=maximum)
+            
 
-            sum_hist = np.sum(hist)
-            sum_it = 0
+            cum_sum_hist = np.cumsum(hist)
+            percentage = cum_sum_hist/cum_sum_hist[-1]
 
-            lower_threshold = None
-            upper_threshold = None
-
-            for i, s in enumerate(hist):
-                sum_it = sum_it + s
-                if sum_it / sum_hist > lower_percentile and lower_threshold is None:
-                    lower_threshold = minimum + (maximum - minimum) * i / len(hist)
-                if sum_it / sum_hist >= upper_percentile:
-                    upper_threshold = minimum + (maximum - minimum) * i / len(hist)
-                    break
+            i = np.argmax(percentage > lower_percentile)
+            lower_threshold = minimum + (maximum - minimum) * i / num_bins
+            i = np.argmax(percentage >= upper_percentile)
+            upper_threshold = minimum + (maximum - minimum) * i / num_bins
 
             print("set contrast", lower_threshold, upper_threshold)
             layer.contrast_limits = [lower_threshold, upper_threshold]
@@ -241,7 +237,7 @@ class BrightnessContrast(QWidget):
 
     def _set_full_range(self):
         for layer in self.selected_image_layers():
-            layer.contrast_limits = min_max(layer.data)
+            layer.contrast_limits = min_max(layer._data_view)
 
         self.redraw()
 
@@ -287,31 +283,28 @@ class LayerContrastLimitsWidget(QWidget):
         self.layout().addWidget(slider)
         self.layout().addWidget(lbl_max)
 
-def histogram(layer, num_bins : int = 256, minimum = None, maximum = None, use_cle=True):
+def histogram(layer, num_bins : int = 256, minimum = None, maximum = None):
     """
     This function determines a histogram for a layer and caches it within the metadata of the layer. If the same
     histogram is requested, it will be taken from the cache.
     :return:
     """
-    if "bc_histogram_num_bins" in layer.metadata.keys() and "bc_histogram"  in layer.metadata.keys():
+    if "bc_histogram_num_bins" in layer.metadata.keys() and "bc_histogram" in layer.metadata.keys():
         if num_bins == layer.metadata["bc_histogram_num_bins"]:
             return layer.metadata["bc_histogram"]
 
-    data = layer.data
-    if "dask" in str(type(data)): # ugh
-        data = np.asarray(data)
-    intensity_range = None
-    if minimum is not None and maximum is not None:
-        intensity_range = (minimum, maximum)
 
-    if use_cle:
-        try:
-            import pyclesperanto_prototype as cle
-            hist = np.asarray(cle.histogram(data, num_bins=num_bins, minimum_intensity=minimum, maximum_intensity=maximum, determine_min_max=False))
-        except ImportError:
-            use_cle = False
-    if not use_cle:
-        hist, _ = np.histogram(data, bins=num_bins, range=intensity_range)
+    data = np.asarray(layer._data_view)
+
+    try:
+        import pyclesperanto_prototype as cle
+        hist = np.asarray(cle.histogram(data, num_bins=num_bins, minimum_intensity=minimum, maximum_intensity=maximum, determine_min_max=False))
+    except ImportError:
+        try: 
+            hist, _ = np.histogram(data, bins=num_bins, range=(minimum, maximum))
+
+        except TypeError:
+            pass
 
     # cache result
     if hasattr(layer.data, "bc_histogram_num_bins") and hasattr(layer.data, "bc_histogram"):
@@ -321,9 +314,10 @@ def histogram(layer, num_bins : int = 256, minimum = None, maximum = None, use_c
     # delete cache when data is changed
     def _refresh_data(event):
         reset_histogram_cache(layer)
-
         layer.events.data.disconnect(_refresh_data)
+
     layer.events.data.connect(_refresh_data)
+   
 
     layer.metadata["bc_histogram_num_bins"] = num_bins
     layer.metadata["bc_histogram"] = hist
@@ -331,14 +325,16 @@ def histogram(layer, num_bins : int = 256, minimum = None, maximum = None, use_c
     return hist
 
 def reset_histogram_cache(layer):
-    if "bc_histogram_num_bins" in layer.metadata.keys() and "bc_histogram" in layer.metadata.keys():
+    try:
         layer.metadata.pop("bc_histogram_num_bins")
         layer.metadata.pop("bc_histogram")
+    except KeyError:
+        return
+    return
 
 def min_max(data):
-    if "dask" in str(type(data)): # ugh
-        data = np.asarray(data)
-
+    data = np.asarray(data)
+        
     return float(data.min()), float(data.max())
 
 @napari_hook_implementation
