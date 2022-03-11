@@ -47,7 +47,7 @@ def test_nonimage(make_napari_viewer: Callable[..., napari.Viewer]) -> None:
     # Make a viewer, etc. as before
     viewer = make_napari_viewer()
     image = np.random.randint(256, size=(100, 100), dtype=np.uint8)
-    viewer.add_image(image)
+    viewer.add_image(image, name="img")
     bc = BrightnessContrast(viewer)
     viewer.window.add_dock_widget(bc)
 
