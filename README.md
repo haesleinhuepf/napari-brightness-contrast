@@ -34,7 +34,8 @@ You can install `napari-brightness-contrast` via [pip]:
 
 ## Contributing
 
-Contributions are very welcome.
+Contributions are very welcome.  
+After cloning the repo, install using `pip install -e .[tests]` to enable testing via `pytest`.
 
 ## License
 
