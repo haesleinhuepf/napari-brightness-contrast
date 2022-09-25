@@ -9,7 +9,7 @@ from qtpy.QtWidgets import (
     QSpinBox,
 )
 from qtpy.QtCore import Qt
-from superqt import QRangeSlider
+from superqt import QDoubleRangeSlider
 
 import pyqtgraph as pg
 import numpy as np
@@ -142,9 +142,7 @@ class BrightnessContrast(QWidget):
             if all_maximum is None or all_maximum < maximum:
                 all_maximum = maximum
         all_minimum = np.floor(all_minimum) if all_minimum is not None else 0
-        all_maximum = (
-            np.ceil(all_maximum) if all_maximum is not None else all_minimum + 1
-        )
+        all_maximum = (all_maximum if all_maximum is not None else all_minimum + 1)
 
         self.label_minimum.setText(str(all_minimum))
         self.label_maximum.setText(str(all_maximum))
@@ -301,11 +299,12 @@ class LayerContrastLimitsWidget(QWidget):
         lbl_max.setText("{:.2f}".format(layer.contrast_limits[1]))
 
         # allow to tune min and max within one slider
-        slider = QRangeSlider()
+        slider = QDoubleRangeSlider()
         slider.setOrientation(Qt.Horizontal)
         slider.setMinimum(all_minimum)
         slider.setMaximum(all_maximum)
         slider.setValue(layer.contrast_limits)
+        slider.setSingleStep((all_maximum - all_minimum) / 1000)
 
         # update on change
         def value_changed():
