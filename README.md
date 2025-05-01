@@ -32,6 +32,8 @@ You can install `napari-brightness-contrast` via [pip]:
 
     pip install napari-brightness-contrast
 
+Note: This plugin is not compatible with napari 0.6.0 and later.
+
 ## Contributing
 
 Contributions are very welcome.  
